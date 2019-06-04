@@ -93,8 +93,22 @@ def lambda_handler(event, context):
                 SAN=SAN + ",IP:"+net['PrivateIpAddress']
             else:
                 SAN="IP:" + net['PrivateIpAddress']
-    print("adding follwing IP to certificate " + SAN)
+        if 'Association' in int:
+            if 'PublicIp' in int['Association'] and int['Association']['PublicIp'] != "":
+                if SAN != "":
+                    SAN = SAN + ",IP:" + int['Association']['PublicIp']
+                else:
+                    SAN = "IP:" + int['Association']['PublicIp']
+            if 'PublicDnsName' in int['Association'] and int['Association']['PublicDnsName'] != "":
+                if SAN != "":
+                    SAN = SAN  + ",DNS:" + int['Association']['PublicDnsName']
+                else:
+                    SAN ="DNS" + int['Association']['PublicDnsName']
+
+    print("adding follwing IP and DNS to certificate " + SAN)
     print("hostname " + hostname)
+
+
     os.environ['SAN'] = SAN
     
     os.environ['CA_PWD_DECRYPTED'] = cakey_password
