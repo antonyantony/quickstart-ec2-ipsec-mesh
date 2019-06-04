@@ -53,8 +53,32 @@ install_certificate () {
 	fi
 	rm -fr ./cert.p12
 	echo "certificate installed successful"
-}
 
+	public_ipv4=$(curl http://169.254.169.254/latest/meta-data/public-ipv4)
+	ip addr add ${public_ipv4}/32 dev lo
+	echo "added  ${public_ipv4}/32 dev lo"
+
+	inet_addr=$(ip addr show  dev eth0 | grep "inet ")
+	set $inet_addr
+	ipmask=$2
+	echo "add ${ipmask} to /etc/ipsec.d/policies/private"
+	echo ${ipmask} >> /etc/ipsec.d/policies/private
+
+	grep nameserver  /etc/resolv.conf | while read -r line ;
+	do
+		set ${line};
+		ns=$2;
+		echo "add nameserver ${ns}/32 to /etc/ipsec.d/policies/clear"
+		echo "${ns}/32" >> /etc/ipsec.d/policies/clear;
+	done
+	ip route show default | while read -r line ;
+	do
+		set $line;
+		gw=$3
+		echo "add default gateway ${gw}/32 to /etc/ipsec.d/policies/clear"
+		echo "${gw}/32" >> /etc/ipsec.d/policies/clear
+	done
+}
 
 # config and files will be stored in folder /root/ipsec 
 cd /root
