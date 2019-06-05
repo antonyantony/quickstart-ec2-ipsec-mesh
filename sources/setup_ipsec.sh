@@ -58,6 +58,9 @@ install_certificate () {
 	ip addr add ${public_ipv4}/32 dev lo
 	echo "added  ${public_ipv4}/32 dev lo"
 
+	# what happens with multiple public IP addresses? Is that possible? first one will work?
+	sed -i -e "s/#leftsubnet=PublicIp/leftsubnet=${public_ipv4}/" /etc/ipsec.d/oe-cert.conf
+
 	inet_addr=$(ip addr show  dev eth0 | grep "inet ")
 	set $inet_addr
 	ipmask=$2
