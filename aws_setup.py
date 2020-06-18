@@ -2,20 +2,20 @@
 """
 
   Copyright 2018  Amazon.com, Inc. or its affiliates. All Rights Reserved.
- 
+
   Permission is hereby granted, free of charge, to any person obtaining a copy of this
   software and associated documentation files (the "Software"), to deal in the Software
   without restriction, including without limitation the rights to use, copy, modify,
   merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
   permit persons to whom the Software is furnished to do so.
- 
+
   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
   INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
   PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
   HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
   OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
   SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- 
+
 
 """
 
@@ -24,7 +24,7 @@ import os, sys
 import base64
 
 conf_source_files = ['config/clear', 'config/private', 'config/clear-or-private', 'config/private-or-clear', 'config/oe-cert.conf',
-                     'functions/packages/enroll_cert_lambda_function/enroll_cert_lambda_function.zip', 
+                     'functions/packages/enroll_cert_lambda_function/enroll_cert_lambda_function.zip',
                      'functions/packages/generate_certifcate_lambda_function/generate_certifcate_lambda_function.zip',
                      'functions/packages/ipsec_setup_lambda_function/ipsec_setup_lambda_function.zip',
                      'functions/packages/ca_initialize_lambda_function/ca_initialize_lambda_function.zip',
@@ -35,7 +35,7 @@ conf_source_files = ['config/clear', 'config/private', 'config/clear-or-private'
 code_version = "0.4"
 
 # Create bucket if does not exists
-# if the bucket exists the region must match 
+# if the bucket exists the region must match
 def createBucket (s3, region, name):
     try:
         r = s3.get_bucket_location(Bucket=name)
@@ -48,7 +48,7 @@ def createBucket (s3, region, name):
     except botocore.exceptions.ClientError as e:
         if e.response['Error']['Code'] == 'NoSuchBucket':
             print('bucket does not exists')
-            if region == 'us-east-1': 
+            if region == 'us-east-1':
                 s3.create_bucket(Bucket = name)
             else:
                 s3.create_bucket(Bucket = name , CreateBucketConfiguration={'LocationConstraint': region})
@@ -115,7 +115,7 @@ def generate_ca(region, hostcerts_bucket, cacrypto_bucket, leavecakey, caCmkKey,
 
     # Generation the key and cert with openssl
     p = subprocess.Popen(
-            # ECDSA for the future when libreswan supports it 
+            # ECDSA for the future when libreswan supports it
             # 'openssl ecparam -genkey -name secp384r1 | openssl ec -out ./ca.key.encrypted.pem  -passout pass:' + rnd_token + '  && openssl req -new -extensions v3_ca -sha256 -key ./ca.key.encrypted.pem -x509 -days 3650 -out ./cacert.pem -subj "/CN=ipsec.' + region + '" -passin pass:' + rnd_token,
             'openssl genrsa -aes256 -out ./ca.key.encrypted.pem  -passout pass:' + rnd_token + ' 4096 && openssl req -new -extensions v3_ca -sha256 -key ./ca.key.encrypted.pem -x509 -days 3650 -out ./cacert.pem -subj "/CN=ipsec.' + region + '" -passin pass:' + rnd_token,
         shell=True, stdout=subprocess.PIPE)
@@ -160,17 +160,17 @@ def generate_ca(region, hostcerts_bucket, cacrypto_bucket, leavecakey, caCmkKey,
     boto3.client('lambda', region_name=region).update_function_configuration(FunctionName=certEnrollLamnda,
                                                                              Environment=env)
     print('Lambda function' + certEnrollLamnda + ' updated')
-    
+
     # Restrict the CA key for encryption. Remove allow kms:encrypt action
     policy_response = kms.get_key_policy( KeyId=caCmkKey, PolicyName='default')
     kms.put_key_policy( KeyId=caCmkKey, PolicyName='default', Policy=policy_response['Policy'].replace('"kms:Encrypt",','') )
-    print('Resource policy for CA CMK hardened - removed action kms:encrypt') 
+    print('Resource policy for CA CMK hardened - removed action kms:encrypt')
 
 
 #  Starts the main procedure
 if __name__ == '__main__':
     import argparse, sys, time
-     
+
     if sys.version_info[0] < 3:
       raise Exception("Please use python 3 or above.")
 
@@ -207,7 +207,7 @@ if __name__ == '__main__':
     p.add_argument("--vpc_id", "-v", default="any",
                    metavar="[vpc-id|any]",
                    help="Operate in provided vpc-id or in any vpc in the region (default)")
-    
+
     print('Provisioning IPsec-Mesh version ' + code_version)
     print('\nUse --help for more options\n')
 
@@ -239,9 +239,9 @@ if __name__ == '__main__':
     if answer != 'yes':
         print('Did not provide "yes" answer,exiting...')
         quit()
-    
+
     upload_files(args.region, hostcerts_bucket, conf_sources_bucket)
-    
+
     caCmkKey, certEnrollLamnda = provision_stack(args.region, hostcerts_bucket, cacrypto_bucket, conf_sources_bucket, args.vpc_id)
 
     if args.ca_use_existing == 'no':
