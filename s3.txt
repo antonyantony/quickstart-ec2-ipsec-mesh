@@ -1,0 +1,1 @@
+aws s3 cp sources/setup_ipsec.sh s3://ec2-mesh-ress3configsbucket-1t52dreq6zhk2/quickstart-ec2-ipsec-mesh/sources/
