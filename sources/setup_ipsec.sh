@@ -17,13 +17,15 @@
 # SPDX-License-Identifier: MIT-0#
 ##
 
-set -u
+set -ux
+
+exec >  /tmp/$0-log.txt
+exec 2>&1
 
 # put here the bucket and lambda name 
 configBucket="{{configBucket}}"
 certificate='{{certificate}}'
 certificate_only='{{certificate_only}}'
-
 
 install_certificate () {
 
@@ -42,11 +44,14 @@ install_certificate () {
 		exit 11 
 	fi
 	rm ./tmp
-        rm /etc/ipsec.d/*db || echo ok
+
+	NSS_DB_DIR=${NSS_DB_DIR-'/etc/ipsec.d'}
+
+        rm -fr ${NSS_DB_DIR}/*db
 
     	ipsec initnss
 
-    	pk12util -i ./cert.p12 -d sql:/etc/ipsec.d -W "$password"
+	pk12util -i ./cert.p12 -d sql:${NSS_DB_DIR} -W "$password"
 	if [ $? -ne 0 ]; then
 		echo "Error: Failed to install certifcate"
 		exit 5
@@ -55,19 +60,27 @@ install_certificate () {
 	echo "certificate installed successful"
 
 	public_ipv4=$(curl http://169.254.169.254/latest/meta-data/public-ipv4)
-	ip addr add ${public_ipv4}/32 dev lo
-	echo "added  ${public_ipv4}/32 dev lo"
+	if [ -n "${public_ipv4}" ]; then
+		ip addr add ${public_ipv4}/32 dev lo
+		echo "add  ${public_ipv4}/32 dev lo for nated tunnels"
+	fi
 
 	# what happens with multiple public IP addresses? Is that possible? first one will work?
 	sed -i -e "s/#leftsubnet=PublicIp/leftsubnet=${public_ipv4}/" /etc/ipsec.d/oe-cert.conf
 
-	inet_addr=$(ip addr show  dev eth0 | grep "inet ")
-	set $inet_addr
-	ipmask=$2
-	echo "add ${ipmask} to /etc/ipsec.d/policies/private"
-	echo ${ipmask} >> /etc/ipsec.d/policies/private
+	local_ipv4=$(curl http://169.254.169.254/latest/meta-data/local-ipv4)
 
-	grep nameserver  /etc/resolv.conf | while read -r line ;
+	if [ -n "${local_ipv4}" ]; then
+		inet_addr=$(ip addr | grep "$local_ipv4")
+		if [ -n "${inet_addr}" ]; then
+			set $inet_addr
+			ipmask=$2
+			echo "add ${ipmask} to /etc/ipsec.d/policies/private"
+			echo ${ipmask} >> /etc/ipsec.d/policies/private
+		fi
+	fi
+
+	grep nameserver /etc/resolv.conf | while read -r line ;
 	do
 		set ${line};
 		ns=$2;
@@ -83,6 +96,19 @@ install_certificate () {
 	done
 }
 
+install_ubuntu_essentials () {
+	sudo apt-get -qq update -y
+	sudo apt install -qq -y python3-pip jq
+	sudo apt install -qq -y awscli
+	pip >/dev/null 2>/dev/null || alias pip=pip3
+	NSS_DB_DIR=/var/lib/ipsec/nss
+}
+
+apt_install () {
+	sudo apt-get -qq update -y
+	sudo apt-get -qq install -y libreswan
+}
+
 # config and files will be stored in folder /root/ipsec 
 cd /root
 mkdir ipsec || echo "ignorre"  
@@ -95,6 +121,8 @@ if [ $certificate_only == "true" ]; then
 	exit 0
 fi 
 
+apt-get -v >/dev/null 2>/dev/null && install_ubuntu_essentials
+
 pip --version || curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py && sudo python get-pip.py
 curl https://stedolan.github.io/jq/download/linux64/jq > jq && chmod 755 jq 
 aws --version || sudo pip install boto3 awscli 
@@ -103,7 +131,13 @@ if [ $? -ne 0 ]; then
 	exit 1
 fi 
 
-sudo yum -y install libreswan curl
+apt-get -v >/dev/null 2>/dev/null
+if [ $? -eq 0 ]; then
+	apt_install
+else
+	sudo yum -y install libreswan curl
+fi
+
 if [ $? -ne 0 ]; then 
 	echo "Error: (Libreswan or curl) can not be installed"
 	exit 2
